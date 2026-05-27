@@ -431,10 +431,54 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 }
 .notes-clear-btn:hover{border-color:#8b1a1a;color:#c84a4a;}
 
+
+/* ── CARD LIGHTBOX ── */
+.lightbox-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.88);z-index:1000;
+  align-items:center;justify-content:center;
+  cursor:zoom-out;
+}
+.lightbox-overlay.show{display:flex;}
+.lightbox-img{
+  max-height:90vh;max-width:90vw;
+  border-radius:12px;
+  box-shadow:0 8px 48px rgba(0,0,0,.8);
+  cursor:default;
+  animation:lbPop .2s ease-out;
+}
+.lightbox-close{
+  position:fixed;top:20px;right:24px;
+  font-family:'Cinzel',serif;font-size:11px;letter-spacing:.15em;
+  color:#a89060;background:transparent;border:1px solid #5a4a2a;
+  border-radius:4px;padding:5px 12px;cursor:pointer;
+  text-transform:uppercase;transition:all .15s;z-index:1001;
+}
+.lightbox-close:hover{border-color:#a89060;color:#e8d080;}
+.lightbox-hint{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  font-family:'Cinzel',serif;font-size:9px;letter-spacing:.15em;
+  color:#5a4a2a;text-transform:uppercase;pointer-events:none;
+}
+.zoomable{cursor:zoom-in;}
+.zoomable:hover{opacity:.88;transition:opacity .15s;}
+@keyframes lbPop{
+  from{transform:scale(.85);opacity:0;}
+  to{transform:scale(1);opacity:1;}
+}
+
 </style>
 </head>
 <body>
 <div class="arena">
+
+<!-- LIGHTBOX -->
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕ Close</button>
+  <img class="lightbox-img" id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+  <div class="lightbox-hint">Click anywhere to close</div>
+</div>
+
 
   <header class="site-header">
     <p class="sub">Misfit Adventure</p>
@@ -1115,6 +1159,58 @@ function initNotes(){
 }
 
 document.addEventListener('DOMContentLoaded', function(){ initNotes(); });
+
+
+/* ── CARD LIGHTBOX ── */
+function openLightbox(src, alt){
+  var lb = document.getElementById('lightbox');
+  var img = document.getElementById('lightbox-img');
+  img.src = src; img.alt = alt || 'Card';
+  lb.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('show');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') closeLightbox();
+});
+
+/* Make opponent cards zoomable after render */
+function attachZoom(){
+  document.querySelectorAll('#opponent-row img, #player-row img').forEach(function(img){
+    if(img.classList.contains('zoomable')) return;
+    img.classList.add('zoomable');
+    img.addEventListener('click', function(e){
+      e.stopPropagation();
+      openLightbox(img.src, img.alt);
+    });
+  });
+}
+
+/* Patch renderOpponentRow and refreshPlayerRow to call attachZoom after */
+var _origRenderOpp = typeof renderOpponentRow === 'function' ? renderOpponentRow : null;
+var _origRefreshPlayer = typeof refreshPlayerRow === 'function' ? refreshPlayerRow : null;
+
+document.addEventListener('DOMContentLoaded', function(){
+  /* Wrap after all other scripts have run */
+  if(typeof renderOpponentRow === 'function'){
+    var origRO = renderOpponentRow;
+    renderOpponentRow = function(){
+      origRO();
+      setTimeout(attachZoom, 50);
+    };
+  }
+  if(typeof refreshPlayerRow === 'function'){
+    var origRP = refreshPlayerRow;
+    refreshPlayerRow = function(){
+      origRP();
+      setTimeout(attachZoom, 50);
+    };
+  }
+  setTimeout(attachZoom, 200);
+});
 
 </script>
 </body>
