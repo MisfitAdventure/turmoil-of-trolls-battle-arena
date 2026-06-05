@@ -430,6 +430,13 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   text-transform:uppercase;
 }
 .notes-clear-btn:hover{border-color:#8b1a1a;color:#c84a4a;}
+.notes-export-btn{
+  font-family:'Cinzel',serif;font-size:9px;letter-spacing:.1em;
+  padding:5px 14px;border:1px solid #3a4a2a;border-radius:4px;
+  background:transparent;color:#5a7a3a;cursor:pointer;transition:all .15s;
+  text-transform:uppercase;
+}
+.notes-export-btn:hover{border-color:#6a9a4a;color:#8dc86a;}
 
 
 /* ── CARD LIGHTBOX ── */
@@ -577,6 +584,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 
       </div>
       <div class="notes-actions">
+        <button class="notes-export-btn" onclick="exportSession()">⬇ Export Session</button>
         <button class="notes-clear-btn" onclick="clearNotes()">Clear All Notes</button>
       </div>
     </div>
@@ -664,8 +672,8 @@ const PLAYER_SLOTS = [
   {key:'character', label:'Character',    type:'character',  locked:true},
   {key:'flex1',     label:'Spell/Equip',  type:'spell',      locked:false},
   {key:'flex2',     label:'Spell/Equip',  type:'spell',      locked:false},
-  {key:'base',      label:'Base Card',    type:'base',       locked:true},
   {key:'backstory', label:'Backstory',    type:'background', locked:true},
+  {key:'base',      label:'Base Card',    type:'base',       locked:true},
 ];
 
 const playerCards = {};
@@ -1099,6 +1107,107 @@ function addDiceHistory(val, mode){
     chip.textContent = h.val + (h.mode===2?' /18':' /9');
     el.appendChild(chip);
   });
+}
+
+
+/* ── SESSION EXPORT ── */
+function exportSession(){
+  var lines = [];
+  var now = new Date();
+  var dateStr = now.toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+  var timeStr = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+  lines.push('═══════════════════════════════════════');
+  lines.push('   TURMOIL OF TROLLS — BATTLE NOTES');
+  lines.push('   ' + dateStr + '  ·  ' + timeStr);
+  lines.push('═══════════════════════════════════════');
+  lines.push('');
+
+  // --- Player hand ---
+  lines.push('── YOUR HAND ──────────────────────────');
+  var anyPlayer = false;
+  PLAYER_SLOTS.forEach(function(s){
+    var p = playerCards[s.key];
+    if(p && p.url){
+      anyPlayer = true;
+      var typeLbl = s.locked ? s.type.charAt(0).toUpperCase()+s.type.slice(1) : p.type.charAt(0).toUpperCase()+p.type.slice(1);
+      lines.push('  ['+typeLbl+'] '+(p.name||s.label));
+    }
+  });
+  if(!anyPlayer) lines.push('  (no cards uploaded)');
+  lines.push('');
+
+  // --- Opponent hand ---
+  lines.push('── OPPONENT HAND ───────────────────────');
+  var badge = document.getElementById('opp-badge');
+  lines.push('  ' + (badge ? badge.textContent : 'Default hand'));
+  lines.push('');
+
+  // --- Turn order ---
+  lines.push('── TURN ORDER ──────────────────────────');
+  var turnInputs = document.querySelectorAll('#turn-rows .turn-inp');
+  var hasTurns = false;
+  turnInputs.forEach(function(inp, i){
+    if(inp.value.trim()){
+      hasTurns = true;
+      lines.push('  '+(i+1)+'. '+inp.value.trim());
+    }
+  });
+  if(!hasTurns) lines.push('  (no turns recorded)');
+  lines.push('');
+
+  // --- HP / Damage log ---
+  lines.push('── HP TRACKER ──────────────────────────');
+  var dmgRows = document.querySelectorAll('#dmg-log .dmg-row');
+  var hasDmg = false;
+  dmgRows.forEach(function(row){
+    var who  = row.querySelector('.dmg-who')      ? row.querySelector('.dmg-who').value.trim()      : '';
+    var amt  = row.querySelector('.dmg-amt')      ? row.querySelector('.dmg-amt').value.trim()      : '';
+    var note = row.querySelector('.dmg-note-inp') ? row.querySelector('.dmg-note-inp').value.trim() : '';
+    if(who || amt || note){
+      hasDmg = true;
+      var entry = '  ';
+      if(who)  entry += who;
+      if(amt)  entry += (who ? ' · ' : '') + 'HP: ' + (parseInt(amt,10)>0?'+':'')+amt;
+      if(note) entry += (who||amt ? ' — ' : '') + note;
+      lines.push(entry);
+    }
+  });
+  if(!hasDmg) lines.push('  (no HP entries)');
+  lines.push('');
+
+  // --- Dice history ---
+  lines.push('── DICE HISTORY ────────────────────────');
+  if(diceHistory && diceHistory.length > 0){
+    var diceStr = diceHistory.map(function(h){ return h.val+(h.mode===2?'/18':'/9'); }).join('  ·  ');
+    lines.push('  ' + diceStr);
+  } else {
+    lines.push('  (no rolls recorded)');
+  }
+  lines.push('');
+
+  // --- Free session notes ---
+  lines.push('── SESSION NOTES ───────────────────────');
+  var freeNotes = document.getElementById('session-notes') ? document.getElementById('session-notes').value.trim() : '';
+  if(freeNotes){
+    freeNotes.split('\n').forEach(function(l){ lines.push('  '+l); });
+  } else {
+    lines.push('  (no notes)');
+  }
+  lines.push('');
+  lines.push('═══════════════════════════════════════');
+  lines.push('   Turmoil of Trolls  ·  Misfit Adventure');
+  lines.push('═══════════════════════════════════════');
+
+  var blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'TOT_Session_' + now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0') + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* init dice on load */
